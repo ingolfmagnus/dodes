@@ -3,6 +3,8 @@
 # Press ⌃R to execute it or replace it with your code.
 # Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
 
+from DESmain import bin32
+
 
 def print_hi(name):
     # Use a breakpoint in the code line below to debug your script.
@@ -20,3 +22,6 @@ a = [[1, 2, 3],
      [7, 8, 9] ]
 
 print(a[0][0],a[0][1],sep=" ")
+
+print(bin32(0x11223344))
+
