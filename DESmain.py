@@ -19,17 +19,11 @@ def generateroundkeys(K):
 
     Kplus = getkplus(K)
     C, D = getlr28(Kplus)
-    Clist.append(C)
-    Dlist.append(D)
 
     for i in range(16):
-        C = Clist[i]
-        D = Dlist[i]
         for j in range(shifts[i]):
             C = ((C << 1) + getbit(C, 1, wordsize=28)) & 0xfffffff
             D = ((D << 1) + getbit(D, 1, wordsize=28)) & 0xfffffff
-        Clist.append(C)
-        Dlist.append(D)
         CD = C * 2**28 + D
         keys.append(getsubkey(CD))
     return keys
