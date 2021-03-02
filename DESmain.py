@@ -1,12 +1,140 @@
-def main():
+def blocktest():
     print("encrypting ", hex(0x0123456789ABCDEF), " ...")
-    C = encrypt(0x0123456789ABCDEF, 0x133457799BBCDFF1)
-    print("encrypted to: ", hex(C))
-    print("decrypting ", hex(C), " ...")
+    C = encrypt([0x0123456789ABCDEF], 0x133457799BBCDFF1)
+    print("encrypted to: ", hex(C[0]))
+    print("decrypting ", hex(C[0]), " ...")
     D = decrypt(C, 0x133457799BBCDFF1)
-    print("decrypted to: ", hex(D))
+    print("decrypted to: ", hex(D[0]))
     return
 
+
+def main(inputfile, outputfile):
+    infile = open(inputfile, "rb")
+    intext = infile.read()
+    infile.close()
+
+    while (True):
+        passphrase = input("Enter DES passphrase: ")
+        if (len(bytes(passphrase)) >= 7):
+            break
+        print("Too short!")
+
+    bytesblock = pad8(intext)
+    inblocks = []
+    for blocknum in range(len(intext) // 8):
+        block = 0
+        for bytenum in range(8):
+            block <<= 8
+            block += bytesblock[blocknum*8 + bytenum]
+        inblocks.append(block)
+
+    keybytes = pad8(passphrase)
+    key = 0
+    for keybyte in range(7):
+        key <<= 8
+        key += keybytes[keybyte]
+
+    outblocks = encrypt(inblocks, key)
+
+    outfile = open(outputfile, "wb")
+
+
+def pad8(text):
+    bytesarr = bytearray(text, "UTF-8")
+    numbytes = len(bytesarr)
+    if (numbytes % 8 != 0):
+        for i in range(8 - numbytes % 8):
+            bytesarr.append(0)
+    return bytesarr
+
+
+def decrypt(MBlocks, K):
+    return encrypt(MBlocks, K, reverse=True)
+
+
+def encrypt(MBlocks, K, reverse=False):
+    """
+    Applies DES encryption to 64-bit block of data
+    :param M: 64-bit data blocks, binary coded in integer array
+    :param K: 56-bit key block, binary coded in integer
+    :param reverse: When true, applies subkeys in reverse, thus decrypting the data
+    :return: the resulting data blocks, binary coded in integer array
+    """
+    subkeys = generateroundkeys(K)
+    if (reverse):
+        subkeys.reverse()
+    Cblocks = []
+    for M in MBlocks:
+        MIP = permute(M, IP, wordsize=64)
+
+        L, R = splitbits(MIP, wordsize=64)
+        for SK in subkeys:
+            Lprev = L
+            Rprev = R
+            L = Rprev
+            R = Lprev ^ f(Rprev, SK)
+        RL = (R << 32) + L
+        C = permute(RL, IPR, wordsize=64)
+        Cblocks.append(C)
+
+    return Cblocks
+
+
+def f(v32, k48):
+    v48 = permute(v32, E, wordsize=32)
+    kxv48 = v48 ^ k48
+    result32 = 0
+    for b in range(8):
+        block6 = getbits(kxv48, b * 6 + 1, 6, wordsize=48)
+        srow = (getbit(block6, 1, wordsize=6) << 1) + getbit(block6, 6, wordsize=6)
+        scol = getbits(block6, 2, 4, wordsize=6)
+        block4 = S[b][srow][scol]
+        result32 = (result32 << 4) + block4
+    result32 = permute(result32, P, wordsize=32)
+    return result32
+
+
+def generateroundkeys(K):
+    keys = []
+    CD = 0
+
+    Kplus = permute(K, PC1, wordsize=64)
+
+    C, D = splitbits(Kplus, wordsize=56)
+
+    for i in KeyShifts:
+        for j in range(i):
+            C = ((C << 1) + getbit(C, 1, wordsize=28)) & 0xfffffff
+            D = ((D << 1) + getbit(D, 1, wordsize=28)) & 0xfffffff
+        CD = (C << 28) + D
+        keys.append(permute(CD, PC2, wordsize=56))
+    return keys
+
+
+def permute(V, permutation, wordsize):
+    P = 0
+    for i in permutation:
+        P <<= 1
+        P += getbit(V, i, wordsize)
+    return P
+
+
+def splitbits(bits, wordsize):
+    halfsize = wordsize // 2
+    L = bits >> (halfsize)
+    R = bits & ((1 << halfsize) - 1)
+    return L, R
+
+
+def getbit(value, bit, wordsize=64):
+    return getbits(value, bit, 1, wordsize)
+
+
+def getbits(value, startbit, numbits, wordsize):
+    return value >> (wordsize - startbit - numbits + 1) & ((1 << numbits) - 1)
+
+
+KeyShifts = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
 PC1 = [57, 49, 41, 33, 25, 17, 9,
        1, 58, 50, 42, 34, 26, 18,
@@ -129,100 +257,4 @@ IPR = [40, 8, 48, 16, 56, 24, 64, 32,
        34, 2, 42, 10, 50, 18, 58, 26,
        33, 1, 41, 9, 49, 17, 57, 25
        ]
-
-def decrypt(M, K):
-    return encrypt(M, K, reverse=True)
-
-def encrypt(M, K, reverse=False):
-    subkeys = generateroundkeys(K)
-
-    MIP = permute(M, IP, wordsize=64)
-
-    L, R = getlr32(MIP)
-    if (reverse):
-        subkeys.reverse()
-    for SK in subkeys:
-        Lprev = L
-        Rprev = R
-        L = Rprev
-        R = Lprev ^ f(Rprev, SK)
-    RL = (R << 32) + L
-    C = permute(RL, IPR, wordsize=64)
-
-    return C
-
-
-def f(v32, k48):
-    v48 = permute(v32, E, wordsize=32)
-    kxv48 = v48 ^ k48
-    result32 = 0
-    for b in range(8):
-        block6 = getbits(kxv48, b * 6 + 1, 6, wordsize=48)
-        srow = (getbit(block6, 1, wordsize=6) << 1) + getbit(block6, 6, wordsize=6)
-        scol = getbits(block6, 2, 4, wordsize=6)
-        block4 = S[b][srow][scol]
-        result32 = (result32 << 4) + block4
-    result32 = permute(result32, P, wordsize=32)
-    return result32
-
-
-def generateroundkeys(K):
-    keys = []
-    CD = 0
-    shifts = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
-
-    Kplus = permute(K, PC1, wordsize=64)
-
-    C, D = getlr28(Kplus)
-
-    for i in range(16):
-        for j in range(shifts[i]):
-            C = ((C << 1) + getbit(C, 1, wordsize=28)) & 0xfffffff
-            D = ((D << 1) + getbit(D, 1, wordsize=28)) & 0xfffffff
-        CD = C * 2 ** 28 + D
-        keys.append(permute(CD, PC2, wordsize=56))
-    return keys
-
-
-def permute(V, permutation, wordsize):
-    P = 0
-    for i in permutation:
-        P <<= 1
-        P += getbit(V, i, wordsize)
-    return P
-
-
-def splithalves(bits, halfsize):
-    L = bits >> halfsize
-    R = bits & ((1 << halfsize) - 1)
-    return L, R
-
-
-def getlr32(bits):
-    L = bits >> 32
-    R = bits & 0xffffffff
-    return L, R
-
-
-def getlr28(bits):
-    L = bits >> 28
-    R = bits & 0xfffffff
-    return L, R
-
-
-def getbit(value, bit, wordsize=64):
-    return value >> (wordsize - bit) & 1
-
-
-def getbits(value, startbit, numbits, wordsize):
-    return value >> (wordsize - startbit - numbits + 1) & ((1 << numbits) - 1)
-
-
-def bin32(value):
-    s = ""
-    # vfor i in range(8):
-    #    s +=  bin((value >> (8-i)) & 0xf)
-    return bin(value)
-
-
-main()
+blocktest()
