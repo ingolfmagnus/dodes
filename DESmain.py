@@ -1,3 +1,6 @@
+import sys
+
+
 def blocktest():
     print("encrypting ", hex(0x0123456789ABCDEF), " ...")
     C = encrypt([0x0123456789ABCDEF], 0x133457799BBCDFF1)
@@ -8,44 +11,72 @@ def blocktest():
     return
 
 
-def main(inputfile, outputfile):
+def main(inputfile, outputfile, reverse=False):
+    # Read entire file into bytes object
     infile = open(inputfile, "rb")
-    intext = infile.read()
+    inbytes = infile.read()
     infile.close()
 
-    while (True):
-        passphrase = input("Enter DES passphrase: ")
-        if (len(bytes(passphrase)) >= 7):
-            break
-        print("Too short!")
-
-    bytesblock = pad8(intext)
+    # Pad data to 64bits and put into 64-bit blocks (integers)
+    bytesblock = padto64bits(inbytes)
     inblocks = []
-    for blocknum in range(len(intext) // 8):
+    for blocknum in range(len(bytesblock) // 8):
         block = 0
         for bytenum in range(8):
             block <<= 8
-            block += bytesblock[blocknum*8 + bytenum]
+            block += bytesblock[blocknum * 8 + bytenum]
         inblocks.append(block)
 
-    keybytes = pad8(passphrase)
+    # Read and pad the passphrase
+    while (True):
+        passphrase = input("Enter DES passphrase: ")
+        passbytes = bytes(passphrase, "UTF-8")
+        if (len(passbytes) >= 7):
+            break
+        else:
+            print("Too short!")
+    keybytes = padto64bits(bytes(passphrase, "UTF-8"))
+
+    # Construct the key from passphrase bytes
     key = 0
     for keybyte in range(7):
         key <<= 8
         key += keybytes[keybyte]
 
-    outblocks = encrypt(inblocks, key)
+    # Encrypt or decrypt the padded data with the padded key
+    if (reverse == False):
+        outblocks = encrypt(inblocks, key)
+    else:
+        outblocks = decrypt(inblocks, key)
 
+    # Convert int64s to bytes and write to output file
     outfile = open(outputfile, "wb")
 
+    outbytes = bytearray()
+    for block64 in outblocks:
+        for b in range(8):
+            byte = getbits(block64, b * 8 + 1, 8, wordsize=64)
+            outbytes.append(byte)
+    outfile.write(outbytes)
+    outfile.close()
+    return
 
-def pad8(text):
-    bytesarr = bytearray(text, "UTF-8")
-    numbytes = len(bytesarr)
-    if (numbytes % 8 != 0):
-        for i in range(8 - numbytes % 8):
-            bytesarr.append(0)
-    return bytesarr
+
+def padto64bits(block64):
+    """
+    Return a 64bit/8byte padded bytes object
+    :param block64: A bytes object to be padded
+    :return: A padded bytes object
+    """
+    localblock = bytearray(block64)
+    try:
+        numbytes = len(localblock)
+        if (numbytes % 8 != 0):
+            for i in range(8 - numbytes % 8):
+                localblock.append(0)
+    except:
+        e = sys.exc_info()[0]
+    return bytes(localblock)
 
 
 def decrypt(MBlocks, K):
@@ -102,7 +133,7 @@ def generateroundkeys(K):
 
     C, D = splitbits(Kplus, wordsize=56)
 
-    for i in KeyShifts:
+    for i in KEYSHIFTS:
         for j in range(i):
             C = ((C << 1) + getbit(C, 1, wordsize=28)) & 0xfffffff
             D = ((D << 1) + getbit(D, 1, wordsize=28)) & 0xfffffff
@@ -134,7 +165,7 @@ def getbits(value, startbit, numbits, wordsize):
     return value >> (wordsize - startbit - numbits + 1) & ((1 << numbits) - 1)
 
 
-KeyShifts = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
+KEYSHIFTS = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
 PC1 = [57, 49, 41, 33, 25, 17, 9,
        1, 58, 50, 42, 34, 26, 18,
@@ -257,4 +288,6 @@ IPR = [40, 8, 48, 16, 56, 24, 64, 32,
        34, 2, 42, 10, 50, 18, 58, 26,
        33, 1, 41, 9, 49, 17, 57, 25
        ]
-blocktest()
+
+# main("Plaintext.txt", "Ciphertext.txt")
+main("Ciphertext.txt", "Plaintext2.txt", reverse=True)
