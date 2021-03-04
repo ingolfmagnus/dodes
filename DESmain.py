@@ -2,23 +2,30 @@ import sys
 
 
 def blocktest():
-    print("encrypting ", hex(0x0123456789ABCDEF), " ...")
-    C = encrypt([0x0123456789ABCDEF], 0x133457799BBCDFF1)
-    print("encrypted to: ", hex(C[0]))
-    print("decrypting ", hex(C[0]), " ...")
-    D = decrypt(C, 0x133457799BBCDFF1)
-    print("decrypted to: ", hex(D[0]))
+    M = [0x0123456789ABCDEF, 0x0123456789ABCDEF]
+    K = 0x133457799BBCDFF1
+    V = 0x7A65B3757269A47E
+
+    print("encrypting   ", ' '.join(map(hex,M)), "...")
+    C = encrypt(M, K, IV=V)
+    print("encrypted to:", ' '.join(map(hex,C)))
+    print("decrypting   ", ' '.join(map(hex,C)), "...")
+    D = decrypt(C, K, IV=V)
+    print("decrypted to:", ' '.join(map(hex,D)))
     return
 
 
 def main(inputfile, outputfile, reverse=False):
+    # The CDC mode Initial Vector (IV) given in the assignment
+    DEFAULT_IV=0x7A65B3757269A47E
+
     # Read entire file into bytes object
     infile = open(inputfile, "rb")
     inbytes = infile.read()
     infile.close()
 
-    # Pad data to 64bits and put into 64-bit blocks (integers)
-    bytesblock = padto64bits(inbytes)
+    # Pad data to 64 bits (8 bytes) and put into 64-bit blocks (integers)
+    bytesblock = padto8bytes(inbytes)
     inblocks = []
     for blocknum in range(len(bytesblock) // 8):
         block = 0
@@ -27,31 +34,32 @@ def main(inputfile, outputfile, reverse=False):
             block += bytesblock[blocknum * 8 + bytenum]
         inblocks.append(block)
 
-    # Read and pad the passphrase
+    # Read and pad the passphrase. Non-ASCII chars are more than 1 byte each.
     while (True):
         passphrase = input("Enter DES passphrase: ")
         passbytes = bytes(passphrase, "UTF-8")
-        if (len(passbytes) >= 7):
+        if (len(passbytes) >= 8):
             break
         else:
             print("Too short!")
-    keybytes = padto64bits(bytes(passphrase, "UTF-8"))
+    #keybytes = padto8bytes(bytes(passphrase, "UTF-8"))
+    #keybytes = bytes(passphrase, "UTF-8")
 
-    # Construct the key from passphrase bytes
+    # Construct the key from passphrase bytes (the first 8 of them)
     key = 0
-    for keybyte in range(7):
+    for keybyte in range(8):
         key <<= 8
-        key += keybytes[keybyte]
+        key += passbytes[keybyte]
 
     # Encrypt or decrypt the padded data with the padded key
-    if (reverse == False):
-        outblocks = encrypt(inblocks, key)
+    if not reverse:
+        outblocks = encrypt(inblocks, key, IV=DEFAULT_IV)
     else:
-        outblocks = decrypt(inblocks, key)
+        outblocks = decrypt(inblocks, key, IV=DEFAULT_IV)
 
-    # Convert int64s to bytes and write to output file
     outfile = open(outputfile, "wb")
 
+    # Convert int64s to bytes and write to output file
     outbytes = bytearray()
     for block64 in outblocks:
         for b in range(8):
@@ -62,28 +70,11 @@ def main(inputfile, outputfile, reverse=False):
     return
 
 
-def padto64bits(block64):
-    """
-    Return a 64bit/8byte padded bytes object
-    :param block64: A bytes object to be padded
-    :return: A padded bytes object
-    """
-    localblock = bytearray(block64)
-    try:
-        numbytes = len(localblock)
-        if (numbytes % 8 != 0):
-            for i in range(8 - numbytes % 8):
-                localblock.append(0)
-    except:
-        e = sys.exc_info()[0]
-    return bytes(localblock)
+def decrypt(MBlocks, K, IV=0):
+    return encrypt(MBlocks, K, reverse=True, IV=IV)
 
 
-def decrypt(MBlocks, K):
-    return encrypt(MBlocks, K, reverse=True)
-
-
-def encrypt(MBlocks, K, reverse=False):
+def encrypt(MBlocks, K, reverse=False, IV=0):
     """
     Applies DES encryption to 64-bit block of data
     :param M: 64-bit data blocks, binary coded in integer array
@@ -91,13 +82,22 @@ def encrypt(MBlocks, K, reverse=False):
     :param reverse: When true, applies subkeys in reverse, thus decrypting the data
     :return: the resulting data blocks, binary coded in integer array
     """
+
+    # Ensure CBC is not employed on single-block data. XOR with 0 has no effect.
+    if len(MBlocks) < 2:
+        IV = 0
+
     subkeys = generateroundkeys(K)
-    if (reverse):
+    if reverse:
         subkeys.reverse()
     Cblocks = []
+    XV = IV
     for M in MBlocks:
+        # Do CBC encryption xor
+        if (not reverse):
+            M ^= XV
+        # Initial permutation
         MIP = permute(M, IP, wordsize=64)
-
         L, R = splitbits(MIP, wordsize=64)
         for SK in subkeys:
             Lprev = L
@@ -106,6 +106,11 @@ def encrypt(MBlocks, K, reverse=False):
             R = Lprev ^ f(Rprev, SK)
         RL = (R << 32) + L
         C = permute(RL, IPR, wordsize=64)
+        if not reverse:
+            XV = C # Use as vector in next block
+        else:
+            C ^= XV # Decryption xor
+            XV = M  # Update vector for next block
         Cblocks.append(C)
 
     return Cblocks
@@ -164,6 +169,21 @@ def getbit(value, bit, wordsize=64):
 def getbits(value, startbit, numbits, wordsize):
     return value >> (wordsize - startbit - numbits + 1) & ((1 << numbits) - 1)
 
+def padto8bytes(block64):
+    """
+    Return a 8byte padded bytes object
+    :param block64: A bytes object to be padded
+    :return: An 8-byte padded bytes object
+    """
+    localblock = bytearray(block64)
+    try:
+        numbytes = len(localblock)
+        if (numbytes % 8 != 0):
+            for i in range(8 - numbytes % 8):
+                localblock.append(0)
+    except:
+        e = sys.exc_info()[0]
+    return bytes(localblock)
 
 KEYSHIFTS = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
@@ -289,5 +309,7 @@ IPR = [40, 8, 48, 16, 56, 24, 64, 32,
        33, 1, 41, 9, 49, 17, 57, 25
        ]
 
-# main("Plaintext.txt", "Ciphertext.txt")
-main("Ciphertext.txt", "Plaintext2.txt", reverse=True)
+# Encrypt a file
+main("Assignment_1 updated.pdf", "Assignment_1 updated.des")
+# Decrypt a file
+main("Assignment_1 updated.des", "Assignment_1 decrypted.pdf", reverse=True)
