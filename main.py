@@ -16,12 +16,3 @@ if __name__ == '__main__':
     print_hi('PyCharm')
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
-
-a = [[1, 2, 3],
-     [4, 5, 6],
-     [7, 8, 9] ]
-
-print(a[0][0],a[0][1],sep=" ")
-
-print(bin32(0x11223344))
-

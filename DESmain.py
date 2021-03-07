@@ -76,10 +76,11 @@ def decrypt(MBlocks, K, IV=0):
 
 def encrypt(MBlocks, K, reverse=False, IV=0):
     """
-    Applies DES encryption to 64-bit block of data
-    :param M: 64-bit data blocks, binary coded in integer array
-    :param K: 56-bit key block, binary coded in integer
+    Applies DES encryption to 64-bit blocks of data. Multiple blocks are encrypted in CBC mode, one single block in ECB mode.
+    :param MBlocks: 64-bit data blocks, binary coded in integer array
+    :param K: 64-bit key block (56 significant and 8 parity bits), binary coded in integer
     :param reverse: When true, applies subkeys in reverse, thus decrypting the data
+    :param IV: 64-bit Initial Vector for CBC mode. Ignored if data is only one block.
     :return: the resulting data blocks, binary coded in integer array
     """
 
@@ -309,7 +310,14 @@ IPR = [40, 8, 48, 16, 56, 24, 64, 32,
        33, 1, 41, 9, 49, 17, 57, 25
        ]
 
-# Encrypt a file
-main("Assignment_1 updated.pdf", "Assignment_1 updated.des")
-# Decrypt a file
-main("Assignment_1 updated.des", "Assignment_1 decrypted.pdf", reverse=True)
+if __name__ == '__main__':
+    print (__name__, sys.argv)
+    if len(sys.argv) != 4:
+        print("Usage: DESmain -encrypt|-decrypt source destination")
+        exit(0)
+    if sys.argv[1].lower() == "-encrypt":
+        main(sys.argv[2], sys.argv[3], False)
+    elif sys.argv[1].lower() == "-decrypt":
+        main(sys.argv[2], sys.argv[3], True)
+    else:
+        print("Usage: DESmain -encrypt|-decrypt source destination")
