@@ -2,6 +2,10 @@ import sys
 
 
 def blocktest():
+    """
+    Just a function to test crypt/decrypt of single block
+    :return:
+    """
     M = [0x0123456789ABCDEF, 0x0123456789ABCDEF]
     K = 0x133457799BBCDFF1
     V = 0x7A65B3757269A47E
@@ -16,6 +20,14 @@ def blocktest():
 
 
 def main(inputfile, outputfile, reverse=False):
+    """
+    Start function for file encryption/decryption
+    Also does padding and file I/O
+    :param inputfile: Source file of processing (encryption/decryption)
+    :param outputfile: Destinaion file of processing
+    :param reverse: Indicates decryption if true. Default is False.
+    :return:
+    """
     # The CDC mode Initial Vector (IV) given in the assignment
     DEFAULT_IV=0x7A65B3757269A47E
 
@@ -42,8 +54,6 @@ def main(inputfile, outputfile, reverse=False):
             break
         else:
             print("Too short!")
-    #keybytes = padto8bytes(bytes(passphrase, "UTF-8"))
-    #keybytes = bytes(passphrase, "UTF-8")
 
     # Construct the key from passphrase bytes (the first 8 of them)
     key = 0
@@ -71,6 +81,13 @@ def main(inputfile, outputfile, reverse=False):
 
 
 def decrypt(MBlocks, K, IV=0):
+    """
+    Decrypts a list of data blocks (64-bit ints) into
+    :param MBlocks: List of 64-bit integers to be descrypted
+    :param K: 64-bit (56 significant) key for decryption
+    :param IV: 64-bit Initial Vector for CBC mode of multiple blocks
+    :return: List of decrypted data blocks
+    """
     return encrypt(MBlocks, K, reverse=True, IV=IV)
 
 
@@ -118,6 +135,12 @@ def encrypt(MBlocks, K, reverse=False, IV=0):
 
 
 def f(v32, k48):
+    """
+    The f (Feistel) function of the key mixing in DES
+    :param v32: 32-bit half-block of data
+    :param k48: 48-bit generated subkey
+    :return: 32-bit keymixed value
+    """
     v48 = permute(v32, E, wordsize=32)
     kxv48 = v48 ^ k48
     result32 = 0
@@ -132,6 +155,11 @@ def f(v32, k48):
 
 
 def generateroundkeys(K):
+    """
+    Generates the subkeys
+    :param K: 64-bit (56 significant) key
+    :return: List of subkeys
+    """
     keys = []
     CD = 0
 
@@ -149,6 +177,13 @@ def generateroundkeys(K):
 
 
 def permute(V, permutation, wordsize):
+    """
+    Permutes a value according to a permutation list
+    :param V: The value to be permuted
+    :param permutation: A list of bitwise permutation, with bits numbered as 1 to wordsize from left
+    :param wordsize: The bitwise width of the permutation's input and output data
+    :return: The permuted value
+    """
     P = 0
     for i in permutation:
         P <<= 1
@@ -157,6 +192,12 @@ def permute(V, permutation, wordsize):
 
 
 def splitbits(bits, wordsize):
+    """
+    Split a word in two halves and returns the halves as separate values in a list
+    :param bits: The data to be split
+    :param wordsize: The bit width of the data (must be even)
+    :return: List of the two halves
+    """
     halfsize = wordsize // 2
     L = bits >> (halfsize)
     R = bits & ((1 << halfsize) - 1)
@@ -164,10 +205,25 @@ def splitbits(bits, wordsize):
 
 
 def getbit(value, bit, wordsize=64):
+    """
+    Returns a single bit from the data as a 1 or 0
+    :param value: The data to read the bit from
+    :param bit: The bit number, with 1 the leftmost
+    :param wordsize: Word size of the data
+    :return: The value of the bit
+    """
     return getbits(value, bit, 1, wordsize)
 
 
 def getbits(value, startbit, numbits, wordsize):
+    """
+    Returns a range of bits from the data, adjusted to the right.
+    :param value: The data to read bits from
+    :param startbit: The first bit number, with 1 the leftmost
+    :param numbits: The width (number of bits) to read
+    :param wordsize: The word size of the data to read from
+    :return: The range of bits, right-adjusted
+    """
     return value >> (wordsize - startbit - numbits + 1) & ((1 << numbits) - 1)
 
 def padto8bytes(block64):
@@ -186,8 +242,10 @@ def padto8bytes(block64):
         e = sys.exc_info()[0]
     return bytes(localblock)
 
+# Key shifting values in the generation of subkeys
 KEYSHIFTS = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
+# Perutation for subkeys
 PC1 = [57, 49, 41, 33, 25, 17, 9,
        1, 58, 50, 42, 34, 26, 18,
        10, 2, 59, 51, 43, 35, 27,
@@ -197,6 +255,7 @@ PC1 = [57, 49, 41, 33, 25, 17, 9,
        14, 6, 61, 53, 45, 37, 29,
        21, 13, 5, 28, 20, 12, 4]
 
+# Perutation for subkeys
 PC2 = [14, 17, 11, 24, 1, 5,
        3, 28, 15, 6, 21, 10,
        23, 19, 12, 4, 26, 8,
@@ -206,6 +265,7 @@ PC2 = [14, 17, 11, 24, 1, 5,
        44, 49, 39, 56, 34, 53,
        46, 42, 50, 36, 29, 32]
 
+# Initial Permutaion of data
 IP = [58, 50, 42, 34, 26, 18, 10, 2,
       60, 52, 44, 36, 28, 20, 12, 4,
       62, 54, 46, 38, 30, 22, 14, 6,
@@ -216,6 +276,7 @@ IP = [58, 50, 42, 34, 26, 18, 10, 2,
       63, 55, 47, 39, 31, 23, 15, 7
       ]
 
+# Data expansion permutation in f function
 E = [32, 1, 2, 3, 4, 5,
      4, 5, 6, 7, 8, 9,
      8, 9, 10, 11, 12, 13,
@@ -225,6 +286,7 @@ E = [32, 1, 2, 3, 4, 5,
      24, 25, 26, 27, 28, 29,
      28, 29, 30, 31, 32, 1]
 
+# The S-boxes
 S = [
     # S1
     [
@@ -291,6 +353,7 @@ S = [
     ]
 ]
 
+# Permutation in f function
 P = [16, 7, 20, 21,
      29, 12, 28, 17,
      1, 15, 23, 26,
@@ -300,6 +363,7 @@ P = [16, 7, 20, 21,
      19, 13, 30, 6,
      22, 11, 4, 25]
 
+# Final permutation of data in DES
 IPR = [40, 8, 48, 16, 56, 24, 64, 32,
        39, 7, 47, 15, 55, 23, 63, 31,
        38, 6, 46, 14, 54, 22, 62, 30,
