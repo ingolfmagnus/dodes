@@ -1,8 +1,9 @@
-from cryptography.hazmat.primitives.asymmetric import dsa
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import dsa
 from cryptography.hazmat.primitives.asymmetric import utils
 
-
+# Text from assignment
 msg_bytes: bytes = b"Pretty Good Privacy (PGP) is an encryption program that pro- vides cryptographic privacy and authentication for data communi- cation. " \
             b"PGP is used for signing, encrypting, and decrypting texts, e-mails, files, directories, and whole disk partitions and to increase the security of " \
             b"e-mail communications. Phil Zimmermann devel- oped PGP in 1991. PGP encryption uses a serial combination of hashing, data compression, " \
@@ -13,25 +14,21 @@ msg_bytes: bytes = b"Pretty Good Privacy (PGP) is an encryption program that pro
             b"A fingerprint like C3A65E467B5477DF3C4C97904D22B3CA5B32FF66 can be printed on a business card."
 
 def main():
-    my_params = dsa.generate_parameters(3072)
-    print(my_params)
+    # Make a private (and a public) key
     my_key = dsa.generate_private_key(3072)
-    print(my_key)
-    digest = hashes.Hash(hashes.SHA256())
-    digest.update(msg_bytes)
-    msg_hash = digest.finalize()
-    print(msg_hash)
+    # Get the public key in separate variable
     my_pubkey = my_key.public_key()
-    print(my_pubkey)
+    # Make signature of text with private key, hashing with SHA256
     signature = my_key.sign(msg_bytes, hashes.SHA256())
-    print(signature)
+    # Verify signature with public key
     try:
         my_pubkey.verify(signature,msg_bytes,hashes.SHA256())
-    except:
+    except InvalidSignature:
         print("Verification failed.")
         return
     print("Verified.")
 
+    # Extract and print parameters and values
     p = my_key.parameters().parameter_numbers().p
     q = my_key.parameters().parameter_numbers().g
     g = my_key.parameters().parameter_numbers().g
@@ -40,11 +37,9 @@ def main():
 
     r,s = utils.decode_dss_signature(signature)
 
-    print(r, s)
-
-
+    print(r)
+    print(s)
 
 if __name__ == '__main__':
     main()
-
 
